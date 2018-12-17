@@ -1,0 +1,198 @@
+---
+title: "Short Read Data Analysis"
+author: "Prof. Harbert"
+date: "November 7, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Aims
+
++ Work with Illumina short read sequencing data.
++ Check quality control parameters
++ Perform read mapping against a reference genome with 'bwa' which uses a Burrows-Wheeler alignment.
+
+## Overview
+
+Illumina sequencing-by-synthesis technology is the dominant form of DNA sequencing at present. If you continue in biological research it is likely you will encounter this kind of thing at some point. Illumina is also becoming more widespread in medical genomic sequencing (e.g., cancer tumors, microbiome/metagenomics, pathogen ID). Illumina produces 'short-read' sequence data that usually consists of millions of 50-200 bp sequences. These are often "paired" (i.e., read in both directions which may or may not overlap in the middle). 
+
+Today we will work with a set of merged short read data. This means that we have one file with reads between 150-300bp that was created by overlapping the paired reads from a sequencing experiment. The data we have came from a Zika virus isolate obtained from brain tissue of infected rats in a lab colony (https://www.ncbi.nlm.nih.gov/sra/SRR7694205). 
+
+## Windows Note
+
+If you are using Windows and recently upgraded to the Ubuntu command line for this class. I advise that you do two things:
+
+First, in your Ubuntu Linux user home directory create a link to a folder on your Windows directory tree.
+
+```{bash, eval=FALSE}
+#the command 'ln' creates a link in your file system. '-s' makes this "symbolic" meaning nothing is actually copied but the link just passes you to the other location.
+ln -s /mnt/c/Users/YOUR_USERNAME/Documents ./winbox
+
+```
+
+Second, 'cd' into the 'winbox' directory for all work today and everyday. This will make your files easily found with the Windows file viewer.
+
+```{bash, eval = FALSE}
+cd winbox
+ls -a
+```
+
+
+## Getting set up
+
+Create a new directory to work in for today.
+
+```{bash, eval = FALSE}
+mkdir shortreads
+
+```
+
+We need to download a new set of read files. The one we downloaded last time was the 'merged' reads and we want the original forward and reverse pairs. We will still use 'fastq-dump' from the SRA Toolkit, but this time with one extra flag that gets the paired read files. It seems to be a little quicker too.
+
+```{bash, eval = FALSE}
+fastq-dump -A "SRR7694205" --split-3
+less SRR7694205_1.fastq
+
+```
+
+These data are in the 'fastq' file format. Each sequence read is started with an "@" sign ahead of a read ID. In this case that is the "SRR..." accession number with some suffix number attached. Under the "@" line there is the read quality scores. Then a "+" line with the read ID again followed by the actual sequence data. That makes 4 lines per sequence in *most* fastq file formats. Sometimes there are trailing lines that mess up your line counts (make the total not divisible by 4). 
+
+Challenge: How could you use Unix command line tools to find out how many reads we have in both the forward ("*_1.fastq") and reverse ("_2.fastq") reads files here?
+
+
+## fastqc
+
+If you have not already please use conda to install fastqc.
+
+```{bash, eval=FALSE}
+conda install -c bioconda fastqc
+```
+
+The quality scores recorded in the fastq files here are known as phred scores. The letters are codes for relative probability of error that can be found in a table [here](https://www.drive5.com/usearch/manual/quality_score.html). Using that table and the 'head' or 'less' commands read a few quality score strings and try to 'feel out' what the relative error looks like. Are there any patterns? Are some reads 'better' than others?
+
+
+There is a better way. We can use the program fastqc to visualize quality scoreso and more!
+
+```{bash, eval=FALSE}
+fastqc SRR7694205_* #This will run fastqc twice, once for each read file
+
+
+```
+
+We can view the output as an HTML file in your preferred browser by opening that file stored in the same folder where the data are stored. Reading fastqc output can be very useful for understanding how well your sequencing worked and how your data will behave later. This output can provide clues later as to why a downstream analysis is not working out as it should. 
+
+For comparison check out a few more fastqc pages that I have from my own work [here](https://rsh249.github.io/bioinformatics/PPCPr3kA_GAGATTCC-TATAGCCT_ACC8G0ANXX_L008_001.R2_fastqc.html) and [here]()
+
+# Mapping
+
+For now we will assume the reads are good enough for our purposes and move on to mapping those reads to our reference.
+
+If you have the Entrez-Direct tools installed you can retreive a reference genome with:
+
+```{bash, eval=FALSE}
+
+esearch -db nucleotide -query "NC_035889.1" | efetch -format fasta > zika_ref.fa
+
+```
+
+If you did not get that working you can use curl:
+
+```{bash, eval =FALSE}
+curl https://raw.githubusercontent.com/rsh249/bioinformatics/master/data/zika_ref.fa > zika_ref.fa
+
+```
+
+### Indexing the reference sequence
+
+Here (finally!) is your Burrows-Wheeler Transform in action. We will use bwa to index the reference sequence into a BWT format that can be used to quickly map our sequence reads and find where the reads go in the genome and whether or not there are any differences between our raw data and the reference.
+
+```{bash, eval=FALSE}
+
+bwa index zika_ref.fa
+
+```
+
+What files did this create? Can you read them? In short 'no', but they are all important for the next commands.
+
+### Mapping
+
+Read mapping with bwa for short read data is done with the bwa mem command. This will create an alignment file in the SAM format.
+
+```{bash, eval=FALSE}
+
+bwa mem -M -t2 -R '@RG\tID:1\tSM:A' zika_ref.fa *.fastq > mapping.sam
+
+```
+
+Note how fast this happens. We are processing >10,000 reads per second which is much faster than blast on a comparable dataset.
+
+View the SAM file output. It is difficult to read but we can make it a little better with this bit of code:
+
+```{bash, eval = FALSE}
+samtools view mapping.sam | tr "\t" '\n' | head -n 100
+
+```
+
+Many of our reads are not mapped (value '0' at read position or an '*' anywhere in the alignment info). We can use samtools to return only the mapped reads with samtools view and the '-F' flag (NOTE: -f will return un-mapped reads so be sure to capitalize).
+
+```{bash, eval=FALSE}
+samtools view -h -F 4 mapping.sam > mapped.sam
+
+```
+
+### Converting to BAM (binary) files
+
+Many downstream programs require the alignment results to be in a binary format known as BAM. Most programs also require the BAM files to be sorted and indexed for readability. Samtools can do this too.
+
+```{bash, eval=FALSE}
+samtools view -h -b mapping.sam > mapped.bam
+samtools sort mapped.bam > mapped_sort.bam
+samtools index mapped_sort.bam #Create an index file necessary for later analyses.
+```
+
+### Pileup -- Variant detection
+
+The samtools tool 'mpileup' translates our BAM alignment to a form that stores the variant bases in our data.
+
+```{bash, eval=FALSE}
+
+samtools mpileup --fasta-ref zika_ref.fa mapped_sort.bam > map.pileup
+less map.pileup
+
+```
+
+We want to create a single 'consensus' sequence in a fasta format so we can place our data in a phylogenetic tree later on. To do this we want to convert our pileup into a VCF file (Variant Call Format) that we can then convert to fasta. To create a VCF file we need to upgrade to bcftools, like samtools but for other related formats.
+
+```{bash, eval=FALSE}
+conda install -c bioconda bcftools
+conda install -c bioconda tabix
+
+```
+
+```{bash, eval=FALSE}
+bcftools mpileup -Ou -f zika_ref.fa mapped_sort.bam | bcftools call -mv -Oz -o calls.vcf.gz
+
+tabix calls.vcf.gz
+
+bcftools consensus -H A --fasta-ref zika_ref.fa calls.vcf.gz > consensus.fa
+
+
+```
+
+But how is this consensus.fa different from the reference? We cannot easily tell by reading but we can look at the calls file.
+
+```{bash, eval = FALSE}
+
+gunzip calls.vcf.gz
+less calls.vcf
+grep -v "##"
+grep -v "##" | wc -l
+
+
+```
+
+
+

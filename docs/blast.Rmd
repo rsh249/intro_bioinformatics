@@ -1,0 +1,167 @@
+---
+title: "Basic Local Alignment Search Tool (BLAST)"
+author: "Prof. Harbert"
+date: "October 1, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Today:
+
++ Review the sequencing collaborative file.
++ Discuss sequence alignment.
++ Introduce command line BLAST
+
+# BLAST
+
+NOTE: *Some of the introduction to BLAST and alignment will be done on the board*
+
+
+Some good resources to review later:
+
++ http://www.metagenomics.wiki/tools/blast
++ https://www.ncbi.nlm.nih.gov/books/NBK279684/
++ https://www.ncbi.nlm.nih.gov/books/NBK1734/
+
+
+
+# Get Data
+
+We will attempt to search human transcriptome data against the human genome using NCBI RefSeq data.
+
+First, set up a working directory:
+
+```{bash, eval =FALSE}
+mkdir blast
+cd blast
+mkdir data
+mkdir src
+
+
+```
+
+Then, download data into the data folder
+
+```{bash, eval=FALSE}
+
+curl ftp://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_genomic.fna.gz  > data/genome.fna.gz
+
+
+curl ftp://ftp.ncbi.nlm.nih.gov/refseq/H_sapiens/annotation/GRCh38_latest/refseq_identifiers/GRCh38_latest_rna.fna.gz  > data/transcripts.fna.gz
+
+
+```
+
+And get BLAST:
+
+For Mac users:
+
+```{bash, eval = FALSE}
+curl ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.7.1+-x64-macosx.tar.gz > blast.tar.gz
+
+tar -xzf blast.tar.gz
+
+```
+
+For Windwows users:
+
+```{bash, eval=FALSE}
+curl ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.7.1+-x64-win64.tar.gz > blast.tar.gz
+
+tar -xzf blast.tar.gz
+```
+
+Confirm that you have a folder called ncbi-blast-2.7.1+ or similar and remove the blast.tar.gz file (hint use 'ls' and 'rm' commands).
+
+
+tar flags: https://xkcd.com/1168/
+
+
+# BLAST: Make Database from Genome File
+
+The first step to running a blast analysis on your machine is to build your database. We will be using the genome file for that purpose.NOTE FOR MAC USERS: For all commands below leave out the ".exe" in the program file name.
+
+```{bash, eval=FALSE}
+gunzip data/genome.fna.gz
+
+ncbi-blast-2.7.1+/bin/makeblastdb.exe -in data/genome.fna -dbtype nucl -title human
+
+
+```
+
+```{bash, eval=FALSE}
+gunzip data/transcripts.fna.gz
+head -40 data/transcripts.fna
+
+```
+
+Use the Unix command line tools we talked about last time to look through the genome.fna and transcripts.fna files.
+
+
+
+They should both be in FASTA format which looks like this:
+
+"> NC0000001.1 Descriptive title string<br>
+ACTCGCGCTCGATCGATCGATCGCTG<br>
+ATCGTCGCTCGCTCCTCTCGTGAGAT<br>
+ATCGCTGCTAGCTAGCTGATGCGTAT"
+
+What does this do? (Hint: 'tr --help')
+
+```{bash, eval=FALSE}
+head -100 data/transcripts.fna | tr '\n' '\0'
+
+```
+
+
+To start we want to search for hits to just one of these transcripts. Use this to pull out *part* of the first sequence in the file:
+
+```{bash, eval = FALSE}
+head -50 data/transripts.fna > data/first.fna
+```
+
+And then we can run a basic BLAST search:
+
+```{bash, eval = FALSE}
+head -60 data/transcripts.fna > data/min.fna
+
+ncbi-blast-2.7.1+/bin/blastn.exe -db data/genome.fna -query data/min.fna -evalue 1e-50 
+
+```
+
+Spend some time parsing this output.
+
+Looking at the alignments can be informative. Often, however, you may just want summary data:
+
+```{bash, eval =FALSE}
+ncbi-blast-2.7.1+/bin/blastn.exe -db data/genome.fna -query data/min.fna -evalue 1e-50 -outfmt 6
+```
+
+The columns in this blast output format are:
+
+ 1. 	 qseqid 	 query (e.g., gene) sequence id
+ 
+ 2. 	 sseqid 	 subject (e.g., reference genome) sequence id
+ 3. 	 pident 	 percentage of identical matches
+ 
+ 4. 	 length 	 alignment length
+ 
+ 5. 	 mismatch 	 number of mismatches
+
+ 6. 	 gapopen 	 number of gap openings
+ 
+ 7. 	 qstart 	 start of alignment in query
+ 
+ 8. 	 qend 	 end of alignment in query
+ 
+ 9. 	 sstart 	 start of alignment in subject
+ 
+ 10. 	 send 	 end of alignment in subject
+ 
+ 11. 	 evalue 	 expect value
+ 
+ 12.  bitscore  
+ 
+ 

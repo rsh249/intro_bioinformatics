@@ -1,0 +1,113 @@
+---
+title: "Phylogenetics Crash Course"
+author: "Prof. Harbert"
+date: "October 17, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Next: Phylogenetic tree building
+
+Today we will be using [RAxML](https://sco.h-its.org/exelixis/web/software/raxml/index.html) to build a phylogenetic tree of the taxa below using our aligned CO1 matrix. Once we get this to work we will add the RAxML command to our bash script to start building a small pipeline to perform the MSA and phylogenetic tree construction together.
+
+Organisms:
+
++ Schizosaccharomyces pombe (fungus)
++ Arabidopsis (plant)
++ Kluyveromyces lactis (fungus)
++ Eremothecium gossypii (fungus)
++ C. elegans (roundworm)
++ A. gambiae (mosquito)
++ D. melanogaster (fruit fly)
++ G. gallus (chicken)
++ H. sapiens (human)
++ P. troglodytes (chimp)
++ B. taurus (cow)
++ R. norvegicus (rat)
++ X. tropicalis (frog)
++ D. rerio (fish)
+
+## Focus Activity
+
+Last time we arranged these into natural groups based on shared features. Based on your [reading](http://science.sciencemag.org/content/sci/310/5750/979.full.pdf) try to build a tree structure to relate the above organisms to one another. This will be the hypothesis that we test with our molecular phylogeny from RAxML.
+
+### Phylogenetics Note
+
+The field of phylogenetics has sustained a searing debate over methods for the last couple decades. We will not get into that here, but instead will focus on the current "best practices" that you may encounter. The major methods you should be aware of are Maximum Likelihood, Bayesian, and Parsimony. These refer to the statistic used to calculate tree optimality. 
+
+Parsimony is the simplest and counts changes in nucleotides (characters) across the tree. The best tree is the one with the fewest changes (the most shared characters between sister branches). This kind of statistic is similar to what we did in the focus activity.
+
+However, we know that given enough evolutionary time any given position in the genome may have had multiple nucleotide changes and that we may only observe a subset of all of the "real" changes that have occurred by looking at the modern sequence. Both Maximum Likelihood and Bayesian methods attempt to solve this problem by applying probability models of base substitutions to correct for these unseen changes. These probability models are typically chosen ahead of time or based on the sequence data. For example, in an alignment you may have more Gs and Cs than As and Ts. This might suggest that it is more likely to have an A->C change than the reverse. Maximum Likelihood uses regular frequentist probability models for base changes in a tree. Bayesian methods use a Bayesian probability framework that attempts to account for tree parameters as well.
+
+RAxML is a very common program to use for phylogenetic tree construction these days. It is the premier Maximum Likelihood phylogenetics program. We will focus on some basic tree building with RAxML today.
+
+### Download RAxML Executables
+
+RAxML is distributed as source code [on GitHub]().
+
+Mac Users have it easy and can retrieve the compiled program with:
+
+```{bash, eval=FALSE}
+curl https://www.sfu.ca/biology2/staff/dc/raxml/raxml/raxmlHPC-AVX-v8.zip > raxml.zip
+
+unzip raxml.zip
+
+mv raxmlHPC-AVX-v8/raxml ./raxml
+
+
+
+```
+
+
+Windows users can use: https://github.com/stamatak/standard-RAxML/raw/master/WindowsExecutables_v8.2.10/raxmlHPC-AVX.exe
+
+Download that and copy it manually into your 'msa' directory.
+
+Then: 
+
+```{bash, eval=FALSE}
+mv raxmlHPC-AVX.exe raxml
+
+```
+
+
+Next we need to convert our fasta file to something RAxML can read called a phylip file. To do this we need a little helper script and we need to get rid of some | characters in the fasta file headers.
+
+```{bash, eval =FALSE}
+curl https://raw.githubusercontent.com/rsh249/bioinformatics/master/docs/scripts/convert.sh > convert.sh
+
+sed 's/|.*|://' out.fa > out2.fa #shorten the fasta header
+sed 's/\s//' out2.fa > out3.fa #shorten the fasta header
+
+./convert.sh out3.fa > out.phy
+
+```
+Now we can hopefully run RAxML.
+
+```{bash, eval = FALSE}
+./raxml -p 100 -s out.phy -m GTRCAT -n tree
+
+```
+
+That should have been fast.
+
+Now start RStudio and try (You may have to install some stuff):
+
+```{R, eval = FALSE}
+library("ape")
+library("ggplot2")
+library("ggtree")
+setwd("~/msa")
+tree <- read.tree("RAxML_bestTree.tree")
+tree
+
+ggtree(tree) + geom_tiplab()
+
+
+```
+
+

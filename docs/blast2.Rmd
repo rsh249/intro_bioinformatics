@@ -1,0 +1,164 @@
+---
+title: "BLAST Day 2"
+author: "Prof. Harbert"
+date: "October 2, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### More: BLAST all query sequences from transcript file
+
+First, test this command out with a somewhat larger subset of the transcript data:
+
+```{bash, eval =FALSE}
+head -10000 data/transcripts.fna > data/subtranscripts.fna
+
+ncbi-blast-2.7.1+/bin/blastn.exe -db data/genome.fna -query data/subtranscripts.fna -outfmt 6 -max_target_seqs 1 -evalue 1e-100 -ungapped -num_threads 2 -out blastout.tab    
+
+
+```
+
+
+
+How long did that take?
+
+We can look at the blastout.tab file using cat or head:
+
+```{bash, eval=FALSE}
+head blastout.tab
+```
+
+## Plotting BLAST output in R
+
+Start up RStudio and read the data in (your paths may be slightly different so check those if you are getting errors).
+
+```{r}
+setwd('C:/Users/rharbert/blast2')
+res = read.table('blastout.tab')
+head(res)
+colnames(res) = c('qseqid', 'sseqid', 'pident', 'length', 'mismatch', 'gapopen', 'qstart', 'qend', 'sstart', 'send', 'evalue', 'bitscore') 
+sam = res[sample(x=seq(1, nrow(res)), size = 1000),]
+```
+
+Then load ggplot and try some data visualization of your BLAST results.
+
+```{r}
+library(ggplot2)
+ggplot(data=sam, aes(x=pident, y=evalue)) + geom_point()
+
+ggplot(data=sam, aes(x=evalue)) + geom_histogram(bins=10) 
+
+
+ggplot(data=sam, aes(x=length)) + geom_density() + xlim(c(0,800))
+
+
+```
+
+### genoPlotR -- An R package for visualizing genomic data
+
+First we need to pull just a few of our blast hits.
+
+```{bash, eval=FALSE}
+#These correspond roughly to the hits to "N"
+ncbi-blast-2.7.1+/bin/blastdbcmd.exe -db data/genome.fna -range 9070000-9090000 -entry all > data/blasthits.fa
+
+```
+
+```{r}
+#install.package('genoPlotR')
+
+library(genoPlotR)
+setwd('C:/Users/rharbert/blast2')
+
+tr <- read_dna_seg_from_fasta('data/transcripts.fna')
+ge <- read_dna_seg_from_fasta('data/blasthits.fa')
+trvsge <- read_comparison_from_blast('blastout.tab')
+xlims <- list(c(1,5000), c(1,50000))
+plot_gene_map(dna_segs=list(tr, ge),
+  comparisons=list(trvsge),
+  xlims=xlims,
+  main="Transcripts vs Genome, comparison of the first 50 kb of genome",
+  gene_type="side_blocks",
+  dna_seg_scale=TRUE, 
+  scale=TRUE)
+
+```
+
+Ok. That's a lot and without knowing much about where we are in the genome there is not much to get from that plot. Let's try zooming in to just just a few kb.
+
+```{r}
+xlims <- list(c(1,1000), c(1,5000))
+plot_gene_map(dna_segs=list(tr, ge),
+  comparisons=list(trvsge),
+  xlims=xlims,
+  main="Transcripts vs Genome, comparison of the first 50 kb of genome",
+  gene_type="side_blocks",
+  dna_seg_scale=TRUE, 
+  scale=TRUE)
+```
+
+What's going on here? Hint: Remember that the top of the graph corresponds to the transcript sequence. Why are the matches in the genome spaced out like that?
+
+```{r}
+xlims <- list(c(1000,2000), c(1,5000))
+plot_gene_map(dna_segs=list(tr, ge),
+  comparisons=list(trvsge),
+  xlims=xlims,
+  main="Transcripts vs Genome, comparison of the first 50 kb of genome",
+  gene_type="side_blocks",
+  dna_seg_scale=TRUE, 
+  scale=TRUE)
+```
+
+How about this one? What's with that red bar? (Hint: the blue bars are opposite direction matches and red bars are forward matches)
+
+## Homework:
+
+Get data for mitochondria from platypus and chimps. Build a blast database from one and query the other. Then build a map of the blast hits.
+
+That should look something like this:
+
+The mitochondrial sequences are located on the course GitHub repository
+
+```{bash, eval=FALSE}
+curl https://raw.githubusercontent.com/rsh249/bioinformatics/master/data/pan.fasta > data/pan.fa
+
+curl https://raw.githubusercontent.com/rsh249/bioinformatics/master/data/platypus.fasta > data/platypus.fa
+```
+
+Then ...
+
+```{bash, eval =FALSE}
+ncbi-blast-2.7.1+/bin/makeblastdb.exe -in data/pan.fa -dbtype nucl -title pan
+
+
+ncbi-blast-2.7.1+/bin/blastn.exe -db data/pan.fa -query data/platypus.fa -outfmt 6 -max_target_seqs 100 -evalue 1 -out comp.out    
+
+
+```
+
+And plot as before:
+
+```{r}
+library(genoPlotR)
+setwd('C:/Users/rharbert/blast2')
+
+tr <- read_dna_seg_from_fasta('data/pan.fa')
+ge <- read_dna_seg_from_fasta('data/platypus.fa')
+trvsge <- read_comparison_from_blast('comp.out')
+
+plot_gene_map(dna_segs=list(tr, ge),
+  comparisons=list(trvsge),
+  main="Chimp and Platypus Mitochondria",
+  gene_type="side_blocks",
+  dna_seg_scale=TRUE, 
+  scale=TRUE)
+```
+
+Once you have this working manipulate one of the parameters to blastn including: 'word_size', 'evalue', 'gapopen', or 'gapextend'.
+
+
+Then post at least two versions of the graph to [#blast](https://bio200-bioinformatics.slack.com/messages/CD5UY3933) with a comment on your interpretation of the data you are showing.
